@@ -59,6 +59,13 @@ using namespace std;
 
 // --------------------------------------------------------------
 
+#define BINVOX_EMPTY_VALUE 0
+#define BINVOX_OCCUPIED_VALUE 1
+#define BINVOX_SURFACE_VALUE 1
+#define BINVOX_INSIDE_VALUE 2
+
+// --------------------------------------------------------------
+
 // saves a voxel file (.slab.vox format, can be imported by MagicaVoxel)
 void saveAsVox(const char* fname, const Array3D<uchar>& voxs) {
   Array<v3b> palette(256); // RGB palette
@@ -91,8 +98,18 @@ void saveAsVox(const char* fname, const Array3D<uchar>& voxs) {
   fclose(f);
 }
 
+uchar binvoxValue(uchar v, bool mark_surface) {
+  if (v) {
+    if (mark_surface)
+      return v == INSIDE ? BINVOX_INSIDE_VALUE : BINVOX_SURFACE_VALUE;
+    else
+      return BINVOX_OCCUPIED_VALUE;
+  }
+  return BINVOX_EMPTY_VALUE;
+}
+
 // saves a binvox file (.binvox format, can be viewed with viewvox)
-void saveAsBinvox(const char* fname, const Array3D<uchar>& voxs, v3f translation, float scale) {
+void saveAsBinvox(const char* fname, const Array3D<uchar>& voxs, v3f translation, float scale, bool mark_surface) {
   ofstream output(fname, ios::out | ios::binary);
   sl_assert(output.good());
   long sx = voxs.xsize(), sy = voxs.ysize(), sz = voxs.zsize();
@@ -103,12 +120,13 @@ void saveAsBinvox(const char* fname, const Array3D<uchar>& voxs, v3f translation
   output << "scale " << scale << endl;
   output << "data" << endl;
 
-  uchar currentvalue = voxs.at(0, 0, 0);
+  uchar currentvalue = binvoxValue(voxs.at(0, 0, 0), mark_surface);
   uchar current_seen = 0;
+
   ForIndex(i, sx) {
     ForIndex(j, sy) {
       ForIndex(k, sz) {
-        uchar nextvalue = voxs.at(i, j, k);
+        uchar nextvalue = binvoxValue(voxs.at(i, j, k), mark_surface);
 
         if (nextvalue != currentvalue || current_seen == (uchar)255) {
           output.write((char*)&currentvalue, 1);
@@ -307,6 +325,7 @@ void printHelp() {
   cout << " -f <path to model file: .stl> (required)" << endl;
   cout << " -s <voxelization grid size (default: 256)>" << endl;
   cout << " -v <output .slab.vox file instead of .binvox>" << endl;
+  cout << " -m <mark surface voxels in .binvox file (outside: 0, surface: 1, inside: 2)>" << endl;
   cout << " -o <output file name (default: derived from model file name & grid size)>" << endl;
   printExample();
   cout << endl;
@@ -324,6 +343,7 @@ string filename_output = "";
 
 unsigned int gridsize = 256;
 bool output_vox = false;
+bool mark_surface = false;
 
 // Parse the program parameters and set them as global variables
 void parseProgramParameters(int argc, char* argv[]) {
@@ -346,14 +366,16 @@ void parseProgramParameters(int argc, char* argv[]) {
     } else if (string(argv[i]) == "-s") {
       gridsize = atoi(argv[i + 1]);
       i++;
-    } else if (string(argv[i]) == "-h") {
-      printHelp();
-      exit(0);
-    } else if (string(argv[i]) == "-v") {
-      output_vox = true;
     } else if (string(argv[i]) == "-o") {
       filename_output = argv[i + 1];
       i++;
+    } else if (string(argv[i]) == "-v") {
+      output_vox = true;
+    } else if (string(argv[i]) == "-m") {
+      mark_surface = true;
+    } else if (string(argv[i]) == "-h") {
+      printHelp();
+      exit(0);
     }
   }
   if (!filegiven) {
@@ -449,7 +471,7 @@ int main(int argc, char** argv) {
     if (output_vox) {
       saveAsVox(filename_output.c_str(), voxs);
     } else {
-      saveAsBinvox(filename_output.c_str(), voxs, translation, scale);
+      saveAsBinvox(filename_output.c_str(), voxs, translation, scale, mark_surface);
     }
 
     // report some stats
