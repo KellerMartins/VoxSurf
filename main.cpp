@@ -32,8 +32,8 @@ verticies.
 
 #include <LibSL/LibSL.h>
 
-#include <iostream>
 #include <algorithm>
+#include <iostream>
 #include <queue>
 using namespace std;
 
@@ -46,13 +46,13 @@ using namespace std;
 
 // --------------------------------------------------------------
 
-#define FP_POW    16
-#define FP_SCALE  (1<<FP_POW)
+#define FP_POW 16
+#define FP_SCALE (1 << FP_POW)
 
-#define ALONG_X  1
-#define ALONG_Y  2
-#define ALONG_Z  4
-#define INSIDE   8
+#define ALONG_X 1
+#define ALONG_Y 2
+#define ALONG_Z 4
+#define INSIDE 8
 #define INSIDE_X 16
 #define INSIDE_Y 32
 #define INSIDE_Z 64
@@ -60,8 +60,7 @@ using namespace std;
 // --------------------------------------------------------------
 
 // saves a voxel file (.slab.vox format, can be imported by MagicaVoxel)
-void saveAsVox(const char *fname, const Array3D<uchar>& voxs)
-{
+void saveAsVox(const char* fname, const Array3D<uchar>& voxs) {
   Array<v3b> palette(256); // RGB palette
   palette.fill(0);
   palette[123] = v3b(127, 0, 127);
@@ -69,17 +68,17 @@ void saveAsVox(const char *fname, const Array3D<uchar>& voxs)
   palette[125] = v3b(0, 255, 0);
   palette[126] = v3b(0, 0, 255);
   palette[127] = v3b(255, 255, 255);
-  FILE *f;
+  FILE* f;
   f = fopen(fname, "wb");
   sl_assert(f != NULL);
   long sx = voxs.xsize(), sy = voxs.ysize(), sz = voxs.zsize();
   fwrite(&sx, 4, 1, f);
   fwrite(&sy, 4, 1, f);
   fwrite(&sz, 4, 1, f);
-  ForRangeReverse(i, sx - 1, 0) {
+  ForIndex(i, sx) {
     ForIndex(j, sy) {
       ForRangeReverse(k, sz - 1, 0) {
-        uchar v   = voxs.at(i, j, k);
+        uchar v = voxs.at(i, j, k);
         uchar pal = v != 0 ? 127 : 255;
         if (v == INSIDE) {
           pal = 123;
@@ -92,46 +91,44 @@ void saveAsVox(const char *fname, const Array3D<uchar>& voxs)
   fclose(f);
 }
 
-// saves a voxel file (.slab.vox format, can be imported by MagicaVoxel)
-void saveAsBinvox(const char* fname, const Array3D<uchar>& voxs, unsigned int gridsize)
-{
-    ofstream output(fname, ios::out | ios::binary);
-    sl_assert(output.good());
-    long sx = voxs.xsize(), sy = voxs.ysize(), sz = voxs.zsize();
-    // Write ASCII header
-    output << "#binvox 1" << endl;
-    output << "dim " << sx << " " << sy << " " << sz << "" << endl;
-    output << "translate " << 0 << " " << 0 << " " << 0 << endl;
-    output << "scale " << 1 << endl;
-    output << "data" << endl;
+// saves a binvox file (.binvox format, can be viewed with viewvox)
+void saveAsBinvox(const char* fname, const Array3D<uchar>& voxs, v3f translation, float scale) {
+  ofstream output(fname, ios::out | ios::binary);
+  sl_assert(output.good());
+  long sx = voxs.xsize(), sy = voxs.ysize(), sz = voxs.zsize();
+  // Write ASCII header
+  output << "#binvox 1" << endl;
+  output << "dim " << sx << " " << sz << " " << sy << "" << endl;
+  output << "translate " << -translation[0] << " " << -translation[2] << " " << -translation[1] << endl;
+  output << "scale " << scale << endl;
+  output << "data" << endl;
 
-    uchar currentvalue = voxs.at(0, 0, 0);
-    uchar current_seen = 0;
-    ForIndex(i, sx) {
-        ForRangeReverse(j, sy - 1, 0) {
-            ForIndex(k, sz) {
-                uchar nextvalue = voxs.at(i, j, k);
-                if (nextvalue != currentvalue || current_seen == (uchar)255) {
-                    output.write((char*)&currentvalue, 1);
-                    output.write((char*)&current_seen, 1);
-                    currentvalue = nextvalue;
-                    current_seen = 1;
-                }
-                else {
-                    current_seen++;
-                }
-            }
+  uchar currentvalue = voxs.at(0, 0, 0);
+  uchar current_seen = 0;
+  ForIndex(i, sx) {
+    ForIndex(j, sy) {
+      ForIndex(k, sz) {
+        uchar nextvalue = voxs.at(i, j, k);
+
+        if (nextvalue != currentvalue || current_seen == (uchar)255) {
+          output.write((char*)&currentvalue, 1);
+          output.write((char*)&current_seen, 1);
+          currentvalue = nextvalue;
+          current_seen = 1;
+        } else {
+          current_seen++;
         }
+      }
     }
-    output.write((char*)&currentvalue, 1);
-    output.write((char*)&current_seen, 1);
-    output.close();
+  }
+  output.write((char*)&currentvalue, 1);
+  output.write((char*)&current_seen, 1);
+  output.close();
 }
 
 // --------------------------------------------------------------
 
-inline bool isInTriangle(int i, int j, const v3i& p0, const v3i& p1, const v3i& p2, int& _depth)
-{
+inline bool isInTriangle(int i, int j, const v3i& p0, const v3i& p1, const v3i& p2, int& _depth) {
   v2i delta_p0 = v2i(i, j) - v2i(p0);
   v2i delta_p1 = v2i(i, j) - v2i(p1);
   v2i delta_p2 = v2i(i, j) - v2i(p2);
@@ -156,44 +153,32 @@ inline bool isInTriangle(int i, int j, const v3i& p0, const v3i& p1, const v3i& 
 
 // --------------------------------------------------------------
 
-class swizzle_xyz
-{
+class swizzle_xyz {
 public:
-  inline v3i forward(const v3i& v)  const { return v; }
+  inline v3i forward(const v3i& v) const { return v; }
   inline v3i backward(const v3i& v) const { return v; }
   inline int along() const { return ALONG_Z; }
 };
 
-class swizzle_zxy
-{
+class swizzle_zxy {
 public:
-  inline v3i   forward(const v3i& v)  const { return v3i(v[2], v[0], v[1]); }
-  inline v3i   backward(const v3i& v) const { return v3i(v[1], v[2], v[0]); }
+  inline v3i forward(const v3i& v) const { return v3i(v[2], v[0], v[1]); }
+  inline v3i backward(const v3i& v) const { return v3i(v[1], v[2], v[0]); }
   inline uchar along() const { return ALONG_Y; }
 };
 
-class swizzle_yzx
-{
+class swizzle_yzx {
 public:
-  inline v3i   forward(const v3i& v)  const { return v3i(v[1], v[2], v[0]); }
-  inline v3i   backward(const v3i& v) const { return v3i(v[2], v[0], v[1]); }
+  inline v3i forward(const v3i& v) const { return v3i(v[1], v[2], v[0]); }
+  inline v3i backward(const v3i& v) const { return v3i(v[2], v[0], v[1]); }
   inline uchar along() const { return ALONG_X; }
 };
 
 // --------------------------------------------------------------
 
-template <class S>
-void rasterize(
-  const v3u&                  tri,
-  const std::vector<v3i>&     pts,
-  Array3D<uchar>&             _voxs)
-{
+template <class S> void rasterize(const v3u& tri, const std::vector<v3i>& pts, Array3D<uchar>& _voxs) {
   const S swizzler;
-  v3i tripts[3] = {
-    swizzler.forward(pts[tri[0]]),
-    swizzler.forward(pts[tri[1]]),
-    swizzler.forward(pts[tri[2]])
-  };
+  v3i tripts[3] = {swizzler.forward(pts[tri[0]]), swizzler.forward(pts[tri[1]]), swizzler.forward(pts[tri[2]])};
   // check if triangle is valid
   v2i delta10 = v2i(tripts[1]) - v2i(tripts[0]);
   v2i delta21 = v2i(tripts[2]) - v2i(tripts[1]);
@@ -210,15 +195,14 @@ void rasterize(
   for (int j = pixbx.minCorner()[1]; j <= pixbx.maxCorner()[1]; j++) {
     for (int i = pixbx.minCorner()[0]; i <= pixbx.maxCorner()[0]; i++) {
       int depth;
-      if (isInTriangle(
-        (i << FP_POW) + (1 << (FP_POW - 1)), // centered
-        (j << FP_POW) + (1 << (FP_POW - 1)), // centered
-        tripts[0], tripts[1], tripts[2], depth)) {
+      if (isInTriangle((i << FP_POW) + (1 << (FP_POW - 1)), // centered
+                       (j << FP_POW) + (1 << (FP_POW - 1)), // centered
+                       tripts[0], tripts[1], tripts[2], depth)) {
         v3i vx = swizzler.backward(v3i(i, j, depth >> FP_POW));
         // tag the voxel as occupied
         // NOTE: voxels are likely to be hit multiple times (e.g. thin features)
         //       we flip the bit every time a hit occurs in a voxel
-        _voxs.at(vx[0], vx[1], vx[2]) = ( _voxs.at(vx[0], vx[1], vx[2]) ^ swizzler.along() );
+        _voxs.at(vx[0], vx[1], vx[2]) = (_voxs.at(vx[0], vx[1], vx[2]) ^ swizzler.along());
       }
     }
   }
@@ -228,8 +212,7 @@ void rasterize(
 
 // This version is more robust by using all three direction
 // and voting among them to decide what is filled or not
-void fillInsideVoting(Array3D<uchar>& _voxs)
-{
+void fillInsideVoting(Array3D<uchar>& _voxs) {
   // along x
   ForIndex(k, _voxs.zsize()) {
     ForIndex(j, _voxs.ysize()) {
@@ -275,10 +258,7 @@ void fillInsideVoting(Array3D<uchar>& _voxs)
   // voting
   ForArray3D(_voxs, i, j, k) {
     uchar v = _voxs.at(i, j, k);
-    int votes =
-      (  (v & INSIDE_X) ? 1 : 0)
-      + ((v & INSIDE_Y) ? 1 : 0)
-      + ((v & INSIDE_Z) ? 1 : 0);
+    int votes = ((v & INSIDE_X) ? 1 : 0) + ((v & INSIDE_Y) ? 1 : 0) + ((v & INSIDE_Z) ? 1 : 0);
     // clean
     _voxs.at(i, j, k) &= ~(INSIDE_X | INSIDE_Y | INSIDE_Z);
     if (votes > 1) {
@@ -290,8 +270,7 @@ void fillInsideVoting(Array3D<uchar>& _voxs)
 
 // --------------------------------------------------------------
 
-void fillInside(Array3D<uchar>& _voxs)
-{
+void fillInside(Array3D<uchar>& _voxs) {
   ForIndex(k, _voxs.zsize()) {
     ForIndex(j, _voxs.ysize()) {
       bool inside = false;
@@ -309,23 +288,22 @@ void fillInside(Array3D<uchar>& _voxs)
 
 // --------------------------------------------------------------
 
-void printExample() {
-    cout << "Example: cuda_voxelizer -f /home/jeroen/bunny.ply -s 512" << endl;
-}
+void printExample() { cout << "Example: VoxSurf -f model.stl -s 512" << endl; }
 
 void printHelp() {
-    fprintf(stdout, "\n## HELP  \n");
-    cout << "Program options: " << endl << endl;
-    cout << " -f <path to model file: .ply, .obj, .3ds> (required)" << endl;
-    cout << " -s <voxelization grid size, power of 2: 8 -> 512, 1024, ... (default: 256)>" << endl;
-    cout << " -o <output file name (default: derived from model file name & grid size)>" << endl;
-    printExample();
-    cout << endl;
+  fprintf(stdout, "\n## HELP  \n");
+  cout << "Program options: " << endl << endl;
+  cout << " -f <path to model file: .stl> (required)" << endl;
+  cout << " -s <voxelization grid size (default: 256)>" << endl;
+  cout << " -v <output .slab.vox file instead of .binvox>" << endl;
+  cout << " -o <output file name (default: derived from model file name & grid size)>" << endl;
+  printExample();
+  cout << endl;
 }
 
 inline bool file_exists(const std::string& name) {
-    std::ifstream f(name.c_str());
-    return f.good();
+  std::ifstream f(name.c_str());
+  return f.good();
 }
 
 // Default options
@@ -334,58 +312,56 @@ string filename_base = "";
 string filename_output = "";
 
 unsigned int gridsize = 256;
+bool output_vox = false;
 
 // Parse the program parameters and set them as global variables
 void parseProgramParameters(int argc, char* argv[]) {
-    if (argc < 2) { // not enough arguments
-        fprintf(stdout, "Not enough program parameters. \n \n");
-        printHelp();
-        exit(0);
-    }
-    bool filegiven = false;
-    for (int i = 1; i < argc; i++) {
-        if (string(argv[i]) == "-f") {
-            filename = argv[i + 1];
-            filename_base = filename.substr(0, filename.find_last_of("."));
-            filegiven = true;
-            if (!file_exists(filename)) {
-                fprintf(stdout, "[Err] File does not exist / cannot access: %s \n", filename.c_str());
-                exit(1);
-            }
-            i++;
-        }
-        else if (string(argv[i]) == "-s") {
-            gridsize = atoi(argv[i + 1]);
-            i++;
-        }
-        else if (string(argv[i]) == "-h") {
-            printHelp();
-            exit(0);
-        }
-        else if (string(argv[i]) == "-o") {
-            filename_output = argv[i + 1];
-            i++;
-        }
-    }
-    if (!filegiven) {
-        fprintf(stdout, "[Err] You didn't specify a file using -f (path). This is required. Exiting. \n");
-        printExample();
+  if (argc < 2) { // not enough arguments
+    fprintf(stdout, "Not enough program parameters. \n \n");
+    printHelp();
+    exit(0);
+  }
+  bool filegiven = false;
+  for (int i = 1; i < argc; i++) {
+    if (string(argv[i]) == "-f") {
+      filename = argv[i + 1];
+      filename_base = filename.substr(0, filename.find_last_of("."));
+      filegiven = true;
+      if (!file_exists(filename)) {
+        fprintf(stdout, "[Err] File does not exist / cannot access: %s \n", filename.c_str());
         exit(1);
+      }
+      i++;
+    } else if (string(argv[i]) == "-s") {
+      gridsize = atoi(argv[i + 1]);
+      i++;
+    } else if (string(argv[i]) == "-h") {
+      printHelp();
+      exit(0);
+    } else if (string(argv[i]) == "-v") {
+      output_vox = true;
+    } else if (string(argv[i]) == "-o") {
+      filename_output = argv[i + 1];
+      i++;
     }
+  }
+  if (!filegiven) {
+    fprintf(stdout, "[Err] You didn't specify a file using -f (path). This is required. Exiting. \n");
+    printExample();
+    exit(1);
+  }
 
-    if (filename_output == "") {
-      //filename_output = filename_base + string("_") + to_string(gridsize) + string(".slab.vox");
-      filename_output = filename_base + string("_") + to_string(gridsize) + string(".binvox");
-    }
+  if (filename_output == "") {
+    filename_output =
+        filename_base + string("_") + to_string(gridsize) + (output_vox ? string(".slab.vox") : string(".binvox"));
+  }
 
-    fprintf(stdout, "[Info] Input Filename:  %s \n", filename.c_str());
-    fprintf(stdout, "[Info] Output Filename: %s \n", filename_output.c_str());
-    fprintf(stdout, "[Info] Grid size: %i \n", gridsize);
+  fprintf(stdout, "[Info] Input Filename:  %s \n", filename.c_str());
+  fprintf(stdout, "[Info] Output Filename: %s \n", filename_output.c_str());
+  fprintf(stdout, "[Info] Grid size: %i \n", gridsize);
 }
 
-
-int main(int argc, char **argv)
-{
+int main(int argc, char** argv) {
   parseProgramParameters(argc, argv);
 
   try {
@@ -395,21 +371,25 @@ int main(int argc, char **argv)
     // produce (fixed fp) integer vertices and triangles
     std::vector<v3i> pts;
     std::vector<v3u> tris;
+    float scale;
+    v3f translation;
     {
       float factor = 0.99f;
-      m4x4f boxtrsf = scaleMatrix(v3f(gridsize * FP_SCALE))
-        * scaleMatrix(v3f(1.f) / tupleMax(mesh->bbox().extent()))
-        * translationMatrix((1 - factor) * 0.5f * mesh->bbox().extent())
-        * scaleMatrix(v3f(factor))
-        * translationMatrix(-mesh->bbox().minCorner());
+      m4x4f boxtrsf = scaleMatrix(v3f(factor)) * translationMatrix(v3f(.5f)) *
+                      scaleMatrix(v3f(1.f, -1.f, 1.f) / tupleMax(mesh->bbox().extent())) *
+                      translationMatrix(-mesh->bbox().center());
+      m4x4f boxtrsf_fpscale = scaleMatrix(v3f(gridsize * FP_SCALE)) * boxtrsf;
+
+      scale = 1 / boxtrsf.at(0, 0);
+      translation = v3f(boxtrsf.at(3, 0), boxtrsf.at(3, 1), boxtrsf.at(3, 2)) * scale;
 
       // transform vertices
       pts.resize(mesh->numVertices());
       ForIndex(p, mesh->numVertices()) {
-        v3f pt   = mesh->posAt(p);
-        v3f bxpt = boxtrsf.mulPoint(pt);
-        v3i ipt  = v3i(clamp(round(bxpt), v3f(0.0f), v3f(gridsize * FP_SCALE) - v3f(1.0f)));
-        pts[p]   = ipt;
+        v3f pt = mesh->posAt(p);
+        v3f bxpt = boxtrsf_fpscale.mulPoint(pt);
+        v3i ipt = v3i(clamp(round(bxpt), v3f(0.0f), v3f(gridsize * FP_SCALE) - v3f(1.0f)));
+        pts[p] = ipt;
       }
       // prepare triangles
       tris.reserve(mesh->numTriangles());
@@ -420,7 +400,7 @@ int main(int argc, char **argv)
     }
 
     // rasterize into voxels
-    v3u resolution(mesh->bbox().extent() / tupleMax(mesh->bbox().extent()) * float(gridsize));
+    v3u resolution(gridsize);
     Array3D<uchar> voxs(resolution);
     voxs.fill(0);
     {
@@ -451,8 +431,11 @@ int main(int argc, char **argv)
 #endif
 
     // save the result
-    //saveAsVox(filename_output.c_str(), voxs);
-    saveAsBinvox(filename_output.c_str(), voxs, gridsize);
+    if (output_vox) {
+      saveAsVox(filename_output.c_str(), voxs);
+    } else {
+      saveAsBinvox(filename_output.c_str(), voxs, translation, scale);
+    }
 
     // report some stats
     int num_in_vox = 0;
@@ -465,8 +448,10 @@ int main(int argc, char **argv)
 
   } catch (Fatal& e) {
     cerr << "[ERROR] " << e.message() << endl;
+    return 1;
   }
 
+  return 0;
 }
 
 /* -------------------------------------------------------- */
